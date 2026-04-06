@@ -29,10 +29,10 @@ delete_expired_ssh() {
             if [[ "$exp" < "$today" || "$exp" == "$today" ]]; then
                 userdel "$user" 2>/dev/null && ((count++))
             else
-                echo "#${type}#${user}#${pass}#${exp}" >> "$tmp"
+                echo "#${type}#${user}#${pass}#${exp}${rest:+#$rest}" >> "$tmp"
             fi
         else
-            echo "#${type}#${user}#${pass}#${exp}" >> "$tmp"
+            echo "#${type}#${user}#${pass}#${exp}${rest:+#$rest}" >> "$tmp"
         fi
     done < "$DB"
 
@@ -47,7 +47,8 @@ delete_expired_xray() {
 
     for t in "${types[@]}"; do
         local tmp=$(mktemp)
-        while IFS='#' read -r _ type name val exp; do
+        while IFS='#' read -r _ type name val expfull; do
+            local exp="${expfull%%#*}"  # Ambil hanya tanggal
             if [[ "$type" == "$t" && ("$exp" < "$today" || "$exp" == "$today") ]]; then
                 # Hapus dari xray config
                 if [[ -f "$XRAY_CFG" ]]; then
@@ -64,7 +65,7 @@ with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
                 fi
                 ((count++))
             else
-                echo "#${type}#${name}#${val}#${exp}" >> "$tmp"
+                echo "#${type}#${name}#${val}#${expfull}" >> "$tmp"
             fi
         done < "$DB"
         # Merge back
