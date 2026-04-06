@@ -1,16 +1,21 @@
 #!/bin/bash
 # ================================================
-#   KyoStore VPN - Cleanup Manager
+#   AL STORE TUNNELING - Cleanup Manager
 # ================================================
 
 DIR="/etc/vps"
 source $DIR/config.conf 2>/dev/null
+source $DIR/vmess.sh 2>/dev/null  # provides xray_hot_reload_vmess
+source $DIR/vless.sh 2>/dev/null  # provides xray_hot_reload_vless
+source $DIR/trojan.sh 2>/dev/null # provides xray_hot_reload_trojan
 
 W='\e[1;37m'  N='\e[0m'
 RED='\e[1;31m' GRN='\e[1;32m' YEL='\e[1;33m' CYN='\e[1;36m' C='\e[0;36m'
 
 DB="$DIR/accounts.db"
-XRAY_CFG="${XRAY_CONFIG:-/usr/local/etc/xray/config.json}"
+CFG_VMESS="/etc/xray/vmess.json"
+CFG_VLESS="/etc/xray/vless.json"
+CFG_TROJAN="/etc/xray/trojan.json"
 
 header_clean() {
     clear
