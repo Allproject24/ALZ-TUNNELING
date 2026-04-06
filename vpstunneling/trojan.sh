@@ -16,6 +16,25 @@ DOMAIN="${DOMAIN:-$(curl -s ifconfig.me 2>/dev/null)}"
 rnd_user() { echo "als-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"; }
 rnd_pass() { cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 16; }
 
+# URL encode murni bash — ganti Python3 urllib (~61ms/call → <1ms)
+url_encode() { printf '%s' "$1" | sed 's|/|%2F|g; s| |%20|g; s|?|%3F|g; s|=|%3D|g; s|&|%26|g; s|#|%23|g; s|+|%2B|g'; }
+
+# Cache city+ISP dari config.conf — fetch sekali saja, simpan permanen
+get_city_isp() {
+    source $DIR/config.conf 2>/dev/null
+    if [[ -n "$CITY" && -n "$ISP" ]]; then
+        echo "$CITY|$ISP"; return
+    fi
+    local c i
+    c=$(curl -s --max-time 5 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
+    i=$(curl -s --max-time 5 "https://ipinfo.io/org"  2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+    grep -q "^CITY=" $DIR/config.conf && sed -i "s/^CITY=.*/CITY=\"$c\"/" $DIR/config.conf \
+        || echo "CITY=\"$c\"" >> $DIR/config.conf
+    grep -q "^ISP="  $DIR/config.conf && sed -i "s/^ISP=.*/ISP=\"$i\"/"   $DIR/config.conf \
+        || echo "ISP=\"$i\""  >> $DIR/config.conf
+    echo "$c|$i"
+}
+
 header_trojan() {
     clear
     echo -e "\n  ${CYN}╭─────────────────────────────────────────╮${N}"
@@ -25,8 +44,7 @@ header_trojan() {
 
 trojan_link() {
     local pass="$1" host="$2" port="$3" net="$4" path="$5" name="$6"
-    local enc_path
-    enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))" 2>/dev/null || echo "$path")
+    local enc_path; enc_path=$(url_encode "$path")
     echo "trojan://${pass}@${host}:${port}?security=tls&sni=${host}&type=${net}&path=${enc_path}#${name}"
 }
 
@@ -44,7 +62,7 @@ xray_hot_reload_trojan() {
     for tag in trojan-ws trojan-grpc trojan-upgrade; do
         xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 &
     done
-    wait; sleep 0.05
+    wait; sleep 0.02
 
     for tag in trojan-ws trojan-grpc trojan-upgrade; do
         { xray api adi --server=127.0.0.1:${api_port} "$tmp_dir/$tag.json" >/dev/null 2>&1 \
@@ -92,9 +110,9 @@ show_trojan() {
     local SEP="${CYN}————————————————————————————————————${N}"
     local kw=15
 
-    local city isp
-    city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
-    isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+    # Ambil dari cache (0ms) — fetch+simpan hanya jika belum ada
+    local ci; ci=$(get_city_isp)
+    local city="${ci%%|*}" isp="${ci##*|}"
 
     local lWSTLS=$(trojan_link  "$pass" "$DOMAIN" "443" "ws"          "/trojan"   "$name")
     local lGRPC=$(trojan_link   "$pass" "$DOMAIN" "443" "grpc"        "trojan"    "$name")
