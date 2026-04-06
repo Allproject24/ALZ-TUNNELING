@@ -11,7 +11,7 @@ W='\e[1;37m'  N='\e[0m'
 RED='\e[1;31m' GRN='\e[1;32m' YEL='\e[1;33m' CYN='\e[1;36m'
 
 BRAND="${BRAND_NAME:-AL STORE TUNNELING}"
-VER="v2.0"
+VER="v1.0.0"
 
 svc_dot() {
     systemctl is-active --quiet "$1" 2>/dev/null && echo -e "${GRN}●${N}" || echo -e "${RED}●${N}"
