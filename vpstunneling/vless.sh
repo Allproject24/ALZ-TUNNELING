@@ -40,30 +40,29 @@ vless_reality_link() {
 
 xray_hot_reload_vless() {
     local api_port=10098
-    local all_ok=true
+    local tmp_dir ok=1
+    tmp_dir=$(mktemp -d /tmp/als-reload-XXXXXX)
+
     for tag in vless-ws vless-grpc vless-upgrade; do
-        local tmp
-        tmp=$(mktemp /tmp/als-ib-XXXXXX.json)
-        python3 -c "
-import json, sys
-try:
-    cfg = json.load(open('$XRAY_CFG'))
-    for ib in cfg['inbounds']:
-        if ib['tag'] == '$tag':
-            json.dump({'inbounds':[ib]}, sys.stdout)
-            break
-except: pass
-" > "$tmp" 2>/dev/null
-        if [[ -s "$tmp" ]]; then
-            xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 || true
-            sleep 0.2
-            local out
-            out=$(xray api adi --server=127.0.0.1:${api_port} "$tmp" 2>&1)
-            echo "$out" | grep -qiE "^failed|rpc error" && all_ok=false
-        fi
-        rm -f "$tmp"
+        jq --arg t "$tag" '{inbounds:[.inbounds[]|select(.tag==$t)]}' \
+            "$XRAY_CFG" > "$tmp_dir/$tag.json" 2>/dev/null &
     done
-    if [[ "$all_ok" == "false" ]]; then
+    wait
+
+    for tag in vless-ws vless-grpc vless-upgrade; do
+        xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 &
+    done
+    wait; sleep 0.05
+
+    for tag in vless-ws vless-grpc vless-upgrade; do
+        { xray api adi --server=127.0.0.1:${api_port} "$tmp_dir/$tag.json" >/dev/null 2>&1 \
+            || echo fail >> "$tmp_dir/err"; } &
+    done
+    wait
+
+    grep -q "fail" "$tmp_dir/err" 2>/dev/null && ok=0
+    rm -rf "$tmp_dir"
+    if [[ $ok -eq 0 ]]; then
         systemctl reload xray-vless 2>/dev/null || systemctl restart xray-vless 2>/dev/null
     fi
     return 0
@@ -73,32 +72,29 @@ xray_add_vless() {
     local uuid="$1" name="$2"
     [[ ! -f "$XRAY_CFG" ]] && return
     cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
-    flock -x -w 15 /tmp/als-xray.lock python3 -c "
-import json
-with open('$XRAY_CFG') as f: cfg = json.load(f)
-for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
-        clients = ib['settings'].get('clients',[])
-        if not any(c.get('id')=='$uuid' for c in clients):
-            clients.append({'id':'$uuid','flow':'','email':'${name}@alstore','level':0})
-            ib['settings']['clients'] = clients
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && xray_hot_reload_vless || systemctl restart xray-vless 2>/dev/null
+    local jq_filter='.inbounds|=map(if .tag|test("vless-(ws|grpc|upgrade)") then
+        if (.settings.clients//[]|map(.id)|contains([$id])) then .
+        else .settings.clients+=[{"id":$id,"flow":"","email":$em,"level":0}] end
+        else . end)'
+    (   flock -x -w 15 200
+        jq --arg id "$uuid" --arg em "${name}@alstore" "$jq_filter" \
+            "$XRAY_CFG" > "${XRAY_CFG}.tmp" && mv "${XRAY_CFG}.tmp" "$XRAY_CFG"
+    ) 200>/tmp/als-xray.lock 2>/dev/null && xray_hot_reload_vless || systemctl restart xray-vless 2>/dev/null
 }
 
 xray_del_vless() {
     local uuid="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
     cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
-    flock -x -w 15 /tmp/als-xray.lock python3 -c "
-import json
-with open('$XRAY_CFG') as f: cfg = json.load(f)
-for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
-        ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && xray_hot_reload_vless || systemctl restart xray-vless 2>/dev/null
+    local jq_filter='.inbounds|=map(if .tag|test("vless-(ws|grpc|upgrade)") then
+        .settings.clients=[.settings.clients[]|select(.id!=$id)]
+        else . end)'
+    (   flock -x -w 15 200
+        jq --arg id "$uuid" "$jq_filter" \
+            "$XRAY_CFG" > "${XRAY_CFG}.tmp" && mv "${XRAY_CFG}.tmp" "$XRAY_CFG"
+    ) 200>/tmp/als-xray.lock 2>/dev/null && xray_hot_reload_vless || systemctl restart xray-vless 2>/dev/null
 }
+
 
 show_vless() {
     local name="$1" uuid="$2" exp="$3" limit_ip="$4" quota="$5"
