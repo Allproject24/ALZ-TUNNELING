@@ -26,18 +26,18 @@ header_vless() {
 vless_link() {
     local uuid="$1" host="$2" port="$3" net="$4" path="$5" tls="$6" name="$7"
     local sec="none"; [[ "$tls" == "tls" ]] && sec="tls"
-    local enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))" 2>/dev/null || echo "$path")
+    local enc_path=$(cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))" 2>/dev/null || echo "$path")
     echo "vless://${uuid}@${host}:${port}?encryption=none&security=${sec}&sni=${host}&type=${net}&path=${enc_path}#${name}"
 }
 
 xray_add_vless() {
     local uuid="$1" name="$2"
     [[ ! -f "$XRAY_CFG" ]] && return
-    python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc'):
+    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
         clients = ib['settings'].get('clients',[])
         if not any(c.get('id')=='$uuid' for c in clients):
             clients.append({'id':'$uuid','flow':'','email':'${name}@alstore','level':0})
@@ -49,11 +49,11 @@ with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 xray_del_vless() {
     local uuid="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
-    python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc'):
+    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 " 2>/dev/null && systemctl restart xray 2>/dev/null
@@ -150,7 +150,7 @@ create_vless() {
     local exp_show=$(date -d "+${DAYS} days" +"%d %B %Y")
 
     xray_add_vless "$UUID" "$NAME"
-    echo "#vless#${NAME}#${UUID}#${exp_date}#${LIMIT_IP}#${QUOTA}" >> "$DB"
+    flock -x -w 10 /tmp/als-db.lock bash -c 'echo "#vless#${NAME}#${UUID}#${exp_date}#${LIMIT_IP}#${QUOTA}" >> "$DB"'
 
     echo -e "\n  ${GRN}✓ Akun VLESS berhasil dibuat!${N}"
     show_vless "$NAME" "$UUID" "$exp_show" "$LIMIT_IP" "$QUOTA"
@@ -174,7 +174,7 @@ delete_vless() {
     if [[ "$c" =~ ^[Yy]$ ]]; then
         local UUID=$(grep "^#vless#${NAME}#" "$DB" | cut -d'#' -f4)
         xray_del_vless "$UUID"
-        sed -i "/^#vless#${NAME}#/d" "$DB"
+        flock -x -w 10 /tmp/als-db.lock sed -i "/^#vless#${NAME}#/d" "$DB"
         echo -e "\n  ${GRN}✓ Akun '${NAME}' berhasil dihapus${N}\n"
     else
         echo -e "\n  ${YEL}Dibatalkan${N}\n"
