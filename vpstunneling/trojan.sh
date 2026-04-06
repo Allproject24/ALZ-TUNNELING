@@ -32,30 +32,29 @@ trojan_link() {
 
 xray_hot_reload_trojan() {
     local api_port=10097
-    local all_ok=true
+    local tmp_dir ok=1
+    tmp_dir=$(mktemp -d /tmp/als-reload-XXXXXX)
+
     for tag in trojan-ws trojan-grpc trojan-upgrade; do
-        local tmp
-        tmp=$(mktemp /tmp/als-ib-XXXXXX.json)
-        python3 -c "
-import json, sys
-try:
-    cfg = json.load(open('$XRAY_CFG'))
-    for ib in cfg['inbounds']:
-        if ib['tag'] == '$tag':
-            json.dump({'inbounds':[ib]}, sys.stdout)
-            break
-except: pass
-" > "$tmp" 2>/dev/null
-        if [[ -s "$tmp" ]]; then
-            xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 || true
-            sleep 0.2
-            local out
-            out=$(xray api adi --server=127.0.0.1:${api_port} "$tmp" 2>&1)
-            echo "$out" | grep -qiE "^failed|rpc error" && all_ok=false
-        fi
-        rm -f "$tmp"
+        jq --arg t "$tag" '{inbounds:[.inbounds[]|select(.tag==$t)]}' \
+            "$XRAY_CFG" > "$tmp_dir/$tag.json" 2>/dev/null &
     done
-    if [[ "$all_ok" == "false" ]]; then
+    wait
+
+    for tag in trojan-ws trojan-grpc trojan-upgrade; do
+        xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 &
+    done
+    wait; sleep 0.05
+
+    for tag in trojan-ws trojan-grpc trojan-upgrade; do
+        { xray api adi --server=127.0.0.1:${api_port} "$tmp_dir/$tag.json" >/dev/null 2>&1 \
+            || echo fail >> "$tmp_dir/err"; } &
+    done
+    wait
+
+    grep -q "fail" "$tmp_dir/err" 2>/dev/null && ok=0
+    rm -rf "$tmp_dir"
+    if [[ $ok -eq 0 ]]; then
         systemctl reload xray-trojan 2>/dev/null || systemctl restart xray-trojan 2>/dev/null
     fi
     return 0
@@ -65,31 +64,27 @@ xray_add_trojan() {
     local pass="$1" name="$2"
     [[ ! -f "$XRAY_CFG" ]] && return
     cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
-    flock -x -w 15 /tmp/als-xray.lock python3 -c "
-import json
-with open('$XRAY_CFG') as f: cfg = json.load(f)
-for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('trojan-ws','trojan-grpc','trojan-upgrade'):
-        clients = ib['settings'].get('clients',[])
-        if not any(c.get('password')=='$pass' for c in clients):
-            clients.append({'password':'$pass','email':'${name}@alstore','level':0})
-            ib['settings']['clients'] = clients
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && xray_hot_reload_trojan || systemctl restart xray-trojan 2>/dev/null
+    local jq_filter='.inbounds|=map(if .tag|test("trojan-(ws|grpc|upgrade)") then
+        if (.settings.clients//[]|map(.password)|contains([$pw])) then .
+        else .settings.clients+=[{"password":$pw,"email":$em,"level":0}] end
+        else . end)'
+    (   flock -x -w 15 200
+        jq --arg pw "$pass" --arg em "${name}@alstore" "$jq_filter" \
+            "$XRAY_CFG" > "${XRAY_CFG}.tmp" && mv "${XRAY_CFG}.tmp" "$XRAY_CFG"
+    ) 200>/tmp/als-xray.lock 2>/dev/null && xray_hot_reload_trojan || systemctl restart xray-trojan 2>/dev/null
 }
 
 xray_del_trojan() {
     local pass="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
     cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
-    flock -x -w 15 /tmp/als-xray.lock python3 -c "
-import json
-with open('$XRAY_CFG') as f: cfg = json.load(f)
-for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('trojan-ws','trojan-grpc','trojan-upgrade'):
-        ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('password')!='$pass']
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && xray_hot_reload_trojan || systemctl restart xray-trojan 2>/dev/null
+    local jq_filter='.inbounds|=map(if .tag|test("trojan-(ws|grpc|upgrade)") then
+        .settings.clients=[.settings.clients[]|select(.password!=$pw)]
+        else . end)'
+    (   flock -x -w 15 200
+        jq --arg pw "$pass" "$jq_filter" \
+            "$XRAY_CFG" > "${XRAY_CFG}.tmp" && mv "${XRAY_CFG}.tmp" "$XRAY_CFG"
+    ) 200>/tmp/als-xray.lock 2>/dev/null && xray_hot_reload_trojan || systemctl restart xray-trojan 2>/dev/null
 }
 
 show_trojan() {
