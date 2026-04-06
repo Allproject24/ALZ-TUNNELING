@@ -84,11 +84,12 @@ show_vless() {
     city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
     isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
 
-    local lWSTLS=$(vless_link  "$uuid" "$DOMAIN" "443" "ws"          "/vless"   "tls"  "$name")
-    local lWSNTLS=$(vless_link "$uuid" "$DOMAIN" "80"  "ws"          "/vless"   "none" "$name")
-    local lGRPC=$(vless_link   "$uuid" "$DOMAIN" "443" "grpc"        "vless"    "tls"  "$name")
-    local lUPTLS=$(vless_link  "$uuid" "$DOMAIN" "443" "httpupgrade" "/upvless" "tls"  "$name")
-    local lUPNTLS=$(vless_link "$uuid" "$DOMAIN" "80"  "httpupgrade" "/upvless" "none" "$name")
+    local lREALITY=$(vless_reality_link "$uuid" "$DOMAIN" "$name")
+    local lWSTLS=$(vless_link   "$uuid" "$DOMAIN" "8443" "ws"          "/vless"   "tls"  "$name")
+    local lWSNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"   "ws"          "/vless"   "none" "$name")
+    local lGRPC=$(vless_link    "$uuid" "$DOMAIN" "8443" "grpc"        "vless"    "tls"  "$name")
+    local lUPTLS=$(vless_link   "$uuid" "$DOMAIN" "8443" "httpupgrade" "/upvless" "tls"  "$name")
+    local lUPNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"   "httpupgrade" "/upvless" "none" "$name")
 
     echo ""
     echo -e "$SEP"
@@ -98,18 +99,23 @@ show_vless() {
     printf "${CYN}%-${kw}s${N}: %s\n"            "CITY"          "$city"
     printf "${CYN}%-${kw}s${N}: %s\n"            "ISP"           "$isp"
     printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"   "Domain"        "$DOMAIN"
-    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "443,8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Port REALITY"  "443 (Xray Direct)"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "8443"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Port none TLS" "80,8080"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Port any"      "2052,2053,8880"
     printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"   "id"            "$uuid"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Encryption"    "none"
-    printf "${CYN}%-${kw}s${N}: %s\n"            "network"       "ws,grpc,upgrade"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "network"       "tcp(reality),ws,grpc,upgrade"
     printf "${CYN}%-${kw}s${N}: %s\n"            "path ws"       "/vless"
     printf "${CYN}%-${kw}s${N}: %s\n"            "serviceName"   "vless"
     printf "${CYN}%-${kw}s${N}: %s\n"            "path upgrade"  "/upvless"
     printf "${CYN}%-${kw}s${N}: ${YEL}%s${N}\n" "Expired On"    "$exp"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Limit IP"      "${limit_ip} Device"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Quota"         "${quota} GB"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 18) / 2 )) "★ VLESS REALITY TCP"
+    echo -e "$SEP"
+    echo -e "${GRN}${lREALITY}${N}"
     echo -e "$SEP"
     printf "%*s\n" $(( (36 + 14) / 2 )) "VLESS WS TLS"
     echo -e "$SEP"
