@@ -16,6 +16,25 @@ DOMAIN="${DOMAIN:-$(curl -s ifconfig.me 2>/dev/null)}"
 rnd_user() { echo "als-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"; }
 gen_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null; }
 
+# URL encode murni bash — ganti Python3 urllib (~61ms/call → <1ms)
+url_encode() { printf '%s' "$1" | sed 's|/|%2F|g; s| |%20|g; s|?|%3F|g; s|=|%3D|g; s|&|%26|g; s|#|%23|g; s|+|%2B|g'; }
+
+# Cache city+ISP dari config.conf — fetch sekali saja, simpan permanen
+get_city_isp() {
+    source $DIR/config.conf 2>/dev/null
+    if [[ -n "$CITY" && -n "$ISP" ]]; then
+        echo "$CITY|$ISP"; return
+    fi
+    local c i
+    c=$(curl -s --max-time 5 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
+    i=$(curl -s --max-time 5 "https://ipinfo.io/org"  2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+    grep -q "^CITY=" $DIR/config.conf && sed -i "s/^CITY=.*/CITY=\"$c\"/" $DIR/config.conf \
+        || echo "CITY=\"$c\"" >> $DIR/config.conf
+    grep -q "^ISP="  $DIR/config.conf && sed -i "s/^ISP=.*/ISP=\"$i\"/"   $DIR/config.conf \
+        || echo "ISP=\"$i\""  >> $DIR/config.conf
+    echo "$c|$i"
+}
+
 header_vless() {
     clear
     echo -e "\n  ${CYN}╭─────────────────────────────────────────╮${N}"
@@ -26,8 +45,7 @@ header_vless() {
 vless_link() {
     local uuid="$1" host="$2" port="$3" net="$4" path="$5" tls="$6" name="$7"
     local sec="none"; [[ "$tls" == "tls" ]] && sec="tls"
-    local enc_path
-    enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))" 2>/dev/null || echo "$path")
+    local enc_path; enc_path=$(url_encode "$path")
     echo "vless://${uuid}@${host}:${port}?encryption=none&security=${sec}&sni=${host}&type=${net}&path=${enc_path}&fp=chrome#${name}"
 }
 
@@ -52,7 +70,7 @@ xray_hot_reload_vless() {
     for tag in vless-ws vless-grpc vless-upgrade; do
         xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 &
     done
-    wait; sleep 0.05
+    wait; sleep 0.02
 
     for tag in vless-ws vless-grpc vless-upgrade; do
         { xray api adi --server=127.0.0.1:${api_port} "$tmp_dir/$tag.json" >/dev/null 2>&1 \
@@ -101,9 +119,9 @@ show_vless() {
     local SEP="${CYN}————————————————————————————————————${N}"
     local kw=15
 
-    local city isp
-    city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
-    isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+    # Ambil dari cache (0ms) — fetch+simpan hanya jika belum ada
+    local ci; ci=$(get_city_isp)
+    local city="${ci%%|*}" isp="${ci##*|}"
 
     local lWSTLS=$(vless_link   "$uuid" "$DOMAIN" "443" "ws"          "/vless"   "tls"  "$name")
     local lWSNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"  "ws"          "/vless"   "none" "$name")
@@ -165,7 +183,7 @@ create_vless() {
     echo -ne "  Limit IP      ${Y}[jumlah device]${N}   : "; read -r LIMIT_IP
     [[ -z "$LIMIT_IP" || ! "$LIMIT_IP" =~ ^[0-9]+$ ]] && LIMIT_IP=2
 
-    echo -ne "  Quota (GB)    ${Y}[0 = unlimited]${N}   : "; read -r QUOTA
+    echo -ne "  Quota (GB)    ${Y}[0 = unlimited]${N]   : "; read -r QUOTA
     [[ -z "$QUOTA" || ! "$QUOTA" =~ ^[0-9]+$ ]] && QUOTA=0
 
     echo -ne "  Expired (day) ${Y}[default = 30]${N}    : "; read -r DAYS
