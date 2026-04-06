@@ -30,6 +30,37 @@ trojan_link() {
     echo "trojan://${pass}@${host}:${port}?security=tls&sni=${host}&type=${net}&path=${enc_path}#${name}"
 }
 
+xray_hot_reload_trojan() {
+    local api_port=10097
+    local all_ok=true
+    for tag in trojan-ws trojan-grpc trojan-upgrade; do
+        local tmp
+        tmp=$(mktemp /tmp/als-ib-XXXXXX.json)
+        python3 -c "
+import json, sys
+try:
+    cfg = json.load(open('$XRAY_CFG'))
+    for ib in cfg['inbounds']:
+        if ib['tag'] == '$tag':
+            json.dump({'inbounds':[ib]}, sys.stdout)
+            break
+except: pass
+" > "$tmp" 2>/dev/null
+        if [[ -s "$tmp" ]]; then
+            xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 || true
+            sleep 0.2
+            local out
+            out=$(xray api adi --server=127.0.0.1:${api_port} "$tmp" 2>&1)
+            echo "$out" | grep -qiE "^failed|rpc error" && all_ok=false
+        fi
+        rm -f "$tmp"
+    done
+    if [[ "$all_ok" == "false" ]]; then
+        systemctl reload xray-trojan 2>/dev/null || systemctl restart xray-trojan 2>/dev/null
+    fi
+    return 0
+}
+
 xray_add_trojan() {
     local pass="$1" name="$2"
     [[ ! -f "$XRAY_CFG" ]] && return
@@ -44,7 +75,7 @@ for ib in cfg.get('inbounds',[]):
             clients.append({'password':'$pass','email':'${name}@alstore','level':0})
             ib['settings']['clients'] = clients
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl reload xray-trojan 2>/dev/null || systemctl restart xray-trojan 2>/dev/null
+" 2>/dev/null && xray_hot_reload_trojan || systemctl restart xray-trojan 2>/dev/null
 }
 
 xray_del_trojan() {
@@ -58,7 +89,7 @@ for ib in cfg.get('inbounds',[]):
     if ib.get('tag') in ('trojan-ws','trojan-grpc','trojan-upgrade'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('password')!='$pass']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl reload xray-trojan 2>/dev/null || systemctl restart xray-trojan 2>/dev/null
+" 2>/dev/null && xray_hot_reload_trojan || systemctl restart xray-trojan 2>/dev/null
 }
 
 show_trojan() {
