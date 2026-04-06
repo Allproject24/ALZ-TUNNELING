@@ -33,64 +33,60 @@ vmess_link() {
 
 xray_hot_reload_vmess() {
     local api_port=10099
-    local all_ok=true
+    local tmp_dir ok=1
+    tmp_dir=$(mktemp -d /tmp/als-reload-XXXXXX)
+
+    # [1] Extract per-tag JSON via jq — parallel, no Python3 startup
     for tag in vmess-ws vmess-grpc vmess-upgrade; do
-        local tmp
-        tmp=$(mktemp /tmp/als-ib-XXXXXX.json)
-        python3 -c "
-import json, sys
-try:
-    cfg = json.load(open('$XRAY_CFG'))
-    for ib in cfg['inbounds']:
-        if ib['tag'] == '$tag':
-            json.dump({'inbounds':[ib]}, sys.stdout)
-            break
-except: pass
-" > "$tmp" 2>/dev/null
-        if [[ -s "$tmp" ]]; then
-            xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 || true
-            sleep 0.2
-            local out
-            out=$(xray api adi --server=127.0.0.1:${api_port} "$tmp" 2>&1)
-            echo "$out" | grep -qiE "^failed|rpc error" && all_ok=false
-        fi
-        rm -f "$tmp"
+        jq --arg t "$tag" '{inbounds:[.inbounds[]|select(.tag==$t)]}' \
+            "$XRAY_CFG" > "$tmp_dir/$tag.json" 2>/dev/null &
     done
-    if [[ "$all_ok" == "false" ]]; then
-        systemctl reload xray-vmess 2>/dev/null || systemctl restart xray-vmess 2>/dev/null
-    fi
+    wait
+
+    # [2] Remove all 3 inbounds simultaneously
+    for tag in vmess-ws vmess-grpc vmess-upgrade; do
+        xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 &
+    done
+    wait; sleep 0.05
+
+    # [3] Add all 3 inbounds simultaneously, track failures via temp file
+    for tag in vmess-ws vmess-grpc vmess-upgrade; do
+        { xray api adi --server=127.0.0.1:${api_port} "$tmp_dir/$tag.json" >/dev/null 2>&1 \
+            || echo fail >> "$tmp_dir/err"; } &
+    done
+    wait
+
+    grep -q "fail" "$tmp_dir/err" 2>/dev/null && ok=0
+    rm -rf "$tmp_dir"
+    [[ $ok -eq 0 ]] && systemctl reload xray-vmess 2>/dev/null || systemctl restart xray-vmess 2>/dev/null
     return 0
 }
 
 xray_add_vmess() {
-    local uuid="$1" name="$2" limit_ip="$3"
+    local uuid="$1" name="$2"
     [[ ! -f "$XRAY_CFG" ]] && return
     cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
-    flock -x -w 15 /tmp/als-xray.lock python3 -c "
-import json
-with open('$XRAY_CFG') as f: cfg = json.load(f)
-for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vmess-ws','vmess-grpc','vmess-upgrade'):
-        clients = ib['settings'].get('clients',[])
-        if not any(c.get('id')=='$uuid' for c in clients):
-            clients.append({'id':'$uuid','alterId':0,'email':'${name}@alstore','level':0})
-            ib['settings']['clients'] = clients
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && xray_hot_reload_vmess || systemctl restart xray-vmess 2>/dev/null
+    local jq_filter='.inbounds|=map(if .tag|test("vmess-(ws|grpc|upgrade)") then
+        if (.settings.clients//[]|map(.id)|contains([$id])) then .
+        else .settings.clients+=[{"id":$id,"alterId":0,"email":$em,"level":0}] end
+        else . end)'
+    (   flock -x -w 15 200
+        jq --arg id "$uuid" --arg em "${name}@alstore" "$jq_filter" \
+            "$XRAY_CFG" > "${XRAY_CFG}.tmp" && mv "${XRAY_CFG}.tmp" "$XRAY_CFG"
+    ) 200>/tmp/als-xray.lock 2>/dev/null && xray_hot_reload_vmess || systemctl restart xray-vmess 2>/dev/null
 }
 
 xray_del_vmess() {
     local uuid="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
     cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
-    flock -x -w 15 /tmp/als-xray.lock python3 -c "
-import json
-with open('$XRAY_CFG') as f: cfg = json.load(f)
-for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vmess-ws','vmess-grpc','vmess-upgrade'):
-        ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && xray_hot_reload_vmess || systemctl restart xray-vmess 2>/dev/null
+    local jq_filter='.inbounds|=map(if .tag|test("vmess-(ws|grpc|upgrade)") then
+        .settings.clients=[.settings.clients[]|select(.id!=$id)]
+        else . end)'
+    (   flock -x -w 15 200
+        jq --arg id "$uuid" "$jq_filter" \
+            "$XRAY_CFG" > "${XRAY_CFG}.tmp" && mv "${XRAY_CFG}.tmp" "$XRAY_CFG"
+    ) 200>/tmp/als-xray.lock 2>/dev/null && xray_hot_reload_vmess || systemctl restart xray-vmess 2>/dev/null
 }
 
 show_vmess() {
