@@ -26,21 +26,36 @@ header_vless() {
 vless_link() {
     local uuid="$1" host="$2" port="$3" net="$4" path="$5" tls="$6" name="$7"
     local sec="none"; [[ "$tls" == "tls" ]] && sec="tls"
-    local enc_path=$(cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))" 2>/dev/null || echo "$path")
-    echo "vless://${uuid}@${host}:${port}?encryption=none&security=${sec}&sni=${host}&type=${net}&path=${enc_path}#${name}"
+    local enc_path
+    enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))" 2>/dev/null || echo "$path")
+    echo "vless://${uuid}@${host}:${port}?encryption=none&security=${sec}&sni=${host}&type=${net}&path=${enc_path}&fp=chrome#${name}"
+}
+
+vless_reality_link() {
+    local uuid="$1" host="$2" name="$3"
+    local pubkey="${REALITY_PUBKEY:-H506hn2NUT1W1v55K3CV7hQaecE6VjPMSMNtUO1KDB0}"
+    local shortid="${REALITY_SHORTID:-f7603b4833894470}"
+    echo "vless://${uuid}@${host}:443?encryption=none&security=reality&sni=www.google.com&fp=chrome&pbk=${pubkey}&sid=${shortid}&type=tcp&flow=xtls-rprx-vision#${name}-REALITY"
 }
 
 xray_add_vless() {
     local uuid="$1" name="$2"
     [[ ! -f "$XRAY_CFG" ]] && return
-    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
+    flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
+    tag = ib.get('tag','')
+    if tag in ('vless-ws','vless-grpc','vless-upgrade'):
         clients = ib['settings'].get('clients',[])
         if not any(c.get('id')=='$uuid' for c in clients):
             clients.append({'id':'$uuid','flow':'','email':'${name}@alstore','level':0})
+            ib['settings']['clients'] = clients
+    elif tag == 'vless-reality':
+        clients = ib['settings'].get('clients',[])
+        if not any(c.get('id')=='$uuid' for c in clients):
+            clients.append({'id':'$uuid','flow':'xtls-rprx-vision','email':'${name}@alstore','level':0})
             ib['settings']['clients'] = clients
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 " 2>/dev/null && systemctl restart xray 2>/dev/null
@@ -49,11 +64,12 @@ with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 xray_del_vless() {
     local uuid="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
-    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
+    flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
+    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade','vless-reality'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 " 2>/dev/null && systemctl restart xray 2>/dev/null
