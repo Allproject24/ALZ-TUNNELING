@@ -276,4 +276,4 @@ ssh_menu() {
     esac
 }
 
-ssh_menu
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && ssh_menu
