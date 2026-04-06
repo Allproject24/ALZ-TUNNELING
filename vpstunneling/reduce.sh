@@ -47,40 +47,49 @@ delete_expired_ssh() {
 
 delete_expired_xray() {
     local today=$(date +"%Y-%m-%d")
-    local types=("vmess" "vless" "trojan")
     local count=0
+    local need_reload_vmess=0 need_reload_vless=0 need_reload_trojan=0
 
-    for t in "${types[@]}"; do
+    # Tentukan config file per-type
+    declare -A CFG_MAP=([vmess]="$CFG_VMESS" [vless]="$CFG_VLESS" [trojan]="$CFG_TROJAN")
+
+    for t in vmess vless trojan; do
+        local cfg="${CFG_MAP[$t]}"
+        [[ ! -f "$cfg" ]] && continue
+
         local tmp=$(mktemp)
         while IFS='#' read -r _ type name val expfull; do
-            local exp="${expfull%%#*}"  # Ambil hanya tanggal
+            local exp="${expfull%%#*}"
             if [[ "$type" == "$t" && ("$exp" < "$today" || "$exp" == "$today") ]]; then
-                # Hapus dari xray config
-                if [[ -f "$XRAY_CFG" ]]; then
-                    python3 -c "
+                local key="password"
+                [[ "$t" != "trojan" ]] && key="id"
+                python3 -c "
 import json
-with open('$XRAY_CFG') as f: cfg=json.load(f)
+with open('$cfg') as f: cfg=json.load(f)
 for ib in cfg.get('inbounds',[]):
-    tag=ib.get('tag','')
-    if '$t' in tag:
-        key='password' if '$t'=='trojan' else 'id'
-        ib['settings']['clients']=[c for c in ib['settings'].get('clients',[]) if c.get(key)!='$val']
-with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
+    if '$t' in ib.get('tag',''):
+        ib['settings']['clients']=[c for c in ib['settings'].get('clients',[]) if c.get('$key')!='$val']
+with open('$cfg','w') as f: json.dump(cfg,f,indent=2)
 " 2>/dev/null
-                fi
+                [[ "$t" == "vmess"  ]] && need_reload_vmess=1
+                [[ "$t" == "vless"  ]] && need_reload_vless=1
+                [[ "$t" == "trojan" ]] && need_reload_trojan=1
                 ((count++))
             else
                 echo "#${type}#${name}#${val}#${expfull}" >> "$tmp"
             fi
         done < "$DB"
-        # Merge back
         grep -v "^#${t}#" "$DB" > "${DB}.tmp2" 2>/dev/null
         cat "$tmp" >> "${DB}.tmp2"
         mv "${DB}.tmp2" "$DB"
         rm -f "$tmp"
     done
 
-    [[ $count -gt 0 ]] && systemctl restart xray 2>/dev/null
+    # Hot reload hanya service yang ada perubahan
+    [[ $need_reload_vmess  -eq 1 ]] && xray_hot_reload_vmess  2>/dev/null
+    [[ $need_reload_vless  -eq 1 ]] && xray_hot_reload_vless  2>/dev/null
+    [[ $need_reload_trojan -eq 1 ]] && xray_hot_reload_trojan 2>/dev/null
+
     echo $count
 }
 
