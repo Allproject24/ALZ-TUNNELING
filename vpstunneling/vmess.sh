@@ -58,7 +58,9 @@ xray_hot_reload_vmess() {
 
     grep -q "fail" "$tmp_dir/err" 2>/dev/null && ok=0
     rm -rf "$tmp_dir"
-    [[ $ok -eq 0 ]] && systemctl reload xray-vmess 2>/dev/null || systemctl restart xray-vmess 2>/dev/null
+    if [[ $ok -eq 0 ]]; then
+        systemctl reload xray-vmess 2>/dev/null || systemctl restart xray-vmess 2>/dev/null
+    fi
     return 0
 }
 
