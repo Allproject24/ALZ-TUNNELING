@@ -16,6 +16,22 @@ DOMAIN="${DOMAIN:-$(curl -s ifconfig.me 2>/dev/null)}"
 rnd_user() { echo "als-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"; }
 gen_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null; }
 
+# Cache city+ISP dari config.conf — fetch sekali saja, simpan permanen
+get_city_isp() {
+    source $DIR/config.conf 2>/dev/null
+    if [[ -n "$CITY" && -n "$ISP" ]]; then
+        echo "$CITY|$ISP"; return
+    fi
+    local c i
+    c=$(curl -s --max-time 5 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
+    i=$(curl -s --max-time 5 "https://ipinfo.io/org"  2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+    grep -q "^CITY=" $DIR/config.conf && sed -i "s/^CITY=.*/CITY=\"$c\"/" $DIR/config.conf \
+        || echo "CITY=\"$c\"" >> $DIR/config.conf
+    grep -q "^ISP="  $DIR/config.conf && sed -i "s/^ISP=.*/ISP=\"$i\"/"   $DIR/config.conf \
+        || echo "ISP=\"$i\""  >> $DIR/config.conf
+    echo "$c|$i"
+}
+
 header_vmess() {
     clear
     echo -e "\n  ${CYN}╭─────────────────────────────────────────╮${N}"
@@ -47,7 +63,7 @@ xray_hot_reload_vmess() {
     for tag in vmess-ws vmess-grpc vmess-upgrade; do
         xray api rmi --server=127.0.0.1:${api_port} "$tag" >/dev/null 2>&1 &
     done
-    wait; sleep 0.05
+    wait; sleep 0.02
 
     # [3] Add all 3 inbounds simultaneously, track failures via temp file
     for tag in vmess-ws vmess-grpc vmess-upgrade; do
@@ -96,9 +112,9 @@ show_vmess() {
     local SEP="${CYN}————————————————————————————————————${N}"
     local kw=15
 
-    local city isp
-    city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
-    isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+    # Ambil dari cache (0ms) — fetch+simpan hanya jika belum ada
+    local ci; ci=$(get_city_isp)
+    local city="${ci%%|*}" isp="${ci##*|}"
 
     local lWSTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "ws"          "/vmess"   "tls")
     local lWSNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "ws"          "/vmess"   "none")
