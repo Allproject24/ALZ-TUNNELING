@@ -183,7 +183,7 @@ create_vless() {
     echo -ne "  Limit IP      ${Y}[jumlah device]${N}   : "; read -r LIMIT_IP
     [[ -z "$LIMIT_IP" || ! "$LIMIT_IP" =~ ^[0-9]+$ ]] && LIMIT_IP=2
 
-    echo -ne "  Quota (GB)    ${Y}[0 = unlimited]${N]   : "; read -r QUOTA
+    echo -ne "  Quota (GB)    ${Y}[0 = unlimited]${N}   : "; read -r QUOTA
     [[ -z "$QUOTA" || ! "$QUOTA" =~ ^[0-9]+$ ]] && QUOTA=0
 
     echo -ne "  Expired (day) ${Y}[default = 30]${N}    : "; read -r DAYS
