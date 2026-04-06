@@ -46,19 +46,13 @@ xray_add_vless() {
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    tag = ib.get('tag','')
-    if tag in ('vless-ws','vless-grpc','vless-upgrade'):
+    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
         clients = ib['settings'].get('clients',[])
         if not any(c.get('id')=='$uuid' for c in clients):
             clients.append({'id':'$uuid','flow':'','email':'${name}@alstore','level':0})
             ib['settings']['clients'] = clients
-    elif tag == 'vless-reality':
-        clients = ib['settings'].get('clients',[])
-        if not any(c.get('id')=='$uuid' for c in clients):
-            clients.append({'id':'$uuid','flow':'xtls-rprx-vision','email':'${name}@alstore','level':0})
-            ib['settings']['clients'] = clients
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl restart xray 2>/dev/null
+" 2>/dev/null && systemctl reload xray 2>/dev/null || systemctl restart xray 2>/dev/null
 }
 
 xray_del_vless() {
@@ -69,10 +63,10 @@ xray_del_vless() {
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade','vless-reality'):
+    if ib.get('tag') in ('vless-ws','vless-grpc','vless-upgrade'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl restart xray 2>/dev/null
+" 2>/dev/null && systemctl reload xray 2>/dev/null || systemctl restart xray 2>/dev/null
 }
 
 show_vless() {
@@ -84,12 +78,11 @@ show_vless() {
     city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
     isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
 
-    local lREALITY=$(vless_reality_link "$uuid" "$DOMAIN" "$name")
-    local lWSTLS=$(vless_link   "$uuid" "$DOMAIN" "8443" "ws"          "/vless"   "tls"  "$name")
-    local lWSNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"   "ws"          "/vless"   "none" "$name")
-    local lGRPC=$(vless_link    "$uuid" "$DOMAIN" "8443" "grpc"        "vless"    "tls"  "$name")
-    local lUPTLS=$(vless_link   "$uuid" "$DOMAIN" "8443" "httpupgrade" "/upvless" "tls"  "$name")
-    local lUPNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"   "httpupgrade" "/upvless" "none" "$name")
+    local lWSTLS=$(vless_link   "$uuid" "$DOMAIN" "443" "ws"          "/vless"   "tls"  "$name")
+    local lWSNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"  "ws"          "/vless"   "none" "$name")
+    local lGRPC=$(vless_link    "$uuid" "$DOMAIN" "443" "grpc"        "vless"    "tls"  "$name")
+    local lUPTLS=$(vless_link   "$uuid" "$DOMAIN" "443" "httpupgrade" "/upvless" "tls"  "$name")
+    local lUPNTLS=$(vless_link  "$uuid" "$DOMAIN" "80"  "httpupgrade" "/upvless" "none" "$name")
 
     echo ""
     echo -e "$SEP"
@@ -99,23 +92,18 @@ show_vless() {
     printf "${CYN}%-${kw}s${N}: %s\n"            "CITY"          "$city"
     printf "${CYN}%-${kw}s${N}: %s\n"            "ISP"           "$isp"
     printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"   "Domain"        "$DOMAIN"
-    printf "${CYN}%-${kw}s${N}: %s\n"            "Port REALITY"  "443 (Xray Direct)"
-    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "443,8443"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Port none TLS" "80,8080"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Port any"      "2052,2053,8880"
     printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"   "id"            "$uuid"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Encryption"    "none"
-    printf "${CYN}%-${kw}s${N}: %s\n"            "network"       "tcp(reality),ws,grpc,upgrade"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "network"       "ws,grpc,upgrade"
     printf "${CYN}%-${kw}s${N}: %s\n"            "path ws"       "/vless"
     printf "${CYN}%-${kw}s${N}: %s\n"            "serviceName"   "vless"
     printf "${CYN}%-${kw}s${N}: %s\n"            "path upgrade"  "/upvless"
     printf "${CYN}%-${kw}s${N}: ${YEL}%s${N}\n" "Expired On"    "$exp"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Limit IP"      "${limit_ip} Device"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Quota"         "${quota} GB"
-    echo -e "$SEP"
-    printf "%*s\n" $(( (36 + 18) / 2 )) "★ VLESS REALITY TCP"
-    echo -e "$SEP"
-    echo -e "${GRN}${lREALITY}${N}"
     echo -e "$SEP"
     printf "%*s\n" $(( (36 + 14) / 2 )) "VLESS WS TLS"
     echo -e "$SEP"
