@@ -37,34 +37,55 @@ remove_ip_limit() {
     sed -i "/^${user}.*maxlogins/d" /etc/security/limits.conf 2>/dev/null
 }
 
+gen_payloadws() {
+    local host="$1" path="$2" port="$3" proto="$4"
+    if [[ "$proto" == "tls" ]]; then
+        echo "GET wss://${host}:${port}${path} HTTP/1.1[crlf]Host: ${host}[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+    else
+        echo "GET ws://${host}:${port}${path} HTTP/1.1[crlf]Host: ${host}[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+    fi
+}
+
 show_account() {
     local user="$1" pass="$2" exp="$3" limit_ip="$4"
     local SEP="${CYN}————————————————————————————————————${N}"
     local kw=16
 
+    local payload_ws_ntls payload_ws_tls payload_bug
+    payload_ws_ntls=$(gen_payloadws "$DOMAIN" "/ssh" "80"  "none")
+    payload_ws_tls=$(gen_payloadws  "$DOMAIN" "/ssh" "443" "tls")
+    payload_bug="CONNECT $DOMAIN:443 HTTP/1.1[crlf]Host: $DOMAIN[crlf]Upgrade: websocket[crlf][crlf]"
+
     echo ""
     echo -e "   ${GRN}Account Created Successfully${N}"
     echo -e "$SEP"
-    printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n" "HOST" "$DOMAIN"
+    printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"   "HOST"     "$DOMAIN"
     printf "${CYN}%-${kw}s${N}: ${GRN}%s${N}\n" "Username" "$user"
     printf "${CYN}%-${kw}s${N}: ${GRN}%s${N}\n" "Password" "$pass"
     echo -e "$SEP"
-    printf "${CYN}%-${kw}s${N}: ${YEL}%s${N}\n" "Expired" "$exp"
-    printf "${CYN}%-${kw}s${N}: %s\n" "Limit IP" "${limit_ip} Device"
+    printf "${CYN}%-${kw}s${N}: ${YEL}%s${N}\n" "Expired"  "$exp"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Limit IP" "${limit_ip} Device"
     echo -e "$SEP"
-    printf "%-${kw}s: %s\n" "OpenSSH" "22"
-    printf "%-${kw}s: %s\n" "Dropbear" "90,143,69"
-    printf "%-${kw}s: %s\n" "Stunnel SSL" "777"
-    printf "%-${kw}s: %s\n" "Websockify WS" "9080"
+    printf "${CYN}%-${kw}s${N}: %s\n" "OpenSSH"       "22"
+    printf "${CYN}%-${kw}s${N}: %s\n" "Dropbear"      "143"
+    printf "${CYN}%-${kw}s${N}: %s\n" "SSH WS (80)"   "ws://${DOMAIN}/ssh"
+    printf "${CYN}%-${kw}s${N}: %s\n" "SSH WSS (443)" "wss://${DOMAIN}/ssh"
     echo -e "$SEP"
-    printf "%-${kw}s: %s\n" "TLS" "443,8443"
-    printf "%-${kw}s: %s\n" "None TLS" "80,8080"
-    printf "%-${kw}s: %s\n" "Any" "2052,2053,8880"
+    printf "${CYN}%-${kw}s${N}: %s\n" "TLS Port"  "443, 8443"
+    printf "${CYN}%-${kw}s${N}: %s\n" "NTLS Port" "80, 8080"
+    printf "${CYN}%-${kw}s${N}: %s\n" "UDP-GW"    "7100-7600"
+    printf "${CYN}%-${kw}s${N}: %s\n" "Squid"     "3128"
     echo -e "$SEP"
-    printf "%-${kw}s: %s\n" "Squid Proxy" "3128"
-    printf "%-${kw}s: %s\n" "UDPGW" "7100-7600"
+    echo -e "  ${W}PayloadWS — HTTP Injector / NPV Tunnel${N}"
     echo -e "$SEP"
-    echo -e "${C}http://${DOMAIN}:8081/myvpn-config.zip${N}"
+    echo -e "  ${CYN}[WS No TLS port 80]${N}"
+    echo -e "  ${C}${payload_ws_ntls}${N}"
+    echo -e "$SEP"
+    echo -e "  ${CYN}[WSS TLS port 443]${N}"
+    echo -e "  ${C}${payload_ws_tls}${N}"
+    echo -e "$SEP"
+    echo -e "  ${CYN}[Bug/CONNECT — HTTP Proxy]${N}"
+    echo -e "  ${C}${payload_bug}${N}"
     echo -e "$SEP"
     echo ""
 }
