@@ -191,7 +191,7 @@ create_vless() {
     local exp_show=$(date -d "+${DAYS} days" +"%d %B %Y")
 
     xray_add_vless "$UUID" "$NAME"
-    flock -x -w 10 /tmp/als-db.lock bash -c 'echo "#vless#${NAME}#${UUID}#${exp_date}#${LIMIT_IP}#${QUOTA}" >> "$DB"'
+    echo "#vless#${NAME}#${UUID}#${exp_date}#${LIMIT_IP}#${QUOTA}" >> "$DB"
 
     echo -e "\n  ${GRN}✓ Akun VLESS berhasil dibuat!${N}"
     show_vless "$NAME" "$UUID" "$exp_show" "$LIMIT_IP" "$QUOTA"
