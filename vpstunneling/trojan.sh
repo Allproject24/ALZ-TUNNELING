@@ -60,39 +60,50 @@ with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 
 show_trojan() {
     local name="$1" pass="$2" exp="$3" limit_ip="$4" quota="$5"
-    local lWS=$(trojan_link "$pass" "$DOMAIN" "443" "ws" "/trojan" "$name-WS")
-    local lGRPC=$(trojan_link "$pass" "$DOMAIN" "443" "grpc" "trojan" "$name-GRPC")
+    local SEP="${CYN}————————————————————————————————————${N}"
+    local kw=15
+
+    local city isp
+    city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
+    isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+
+    local lWSTLS=$(trojan_link  "$pass" "$DOMAIN" "443" "ws"          "/trojan"   "$name")
+    local lGRPC=$(trojan_link   "$pass" "$DOMAIN" "443" "grpc"        "trojan"    "$name")
+    local lUPTLS=$(trojan_link  "$pass" "$DOMAIN" "443" "httpupgrade" "/uptrojan" "$name")
 
     echo ""
-    echo -e "  ${CYN}╭─────────────────────────────────────────╮${N}"
-    echo -e "  ${CYN}│${N}  ${YEL}✦ Detail Akun Trojan${N}$(printf '%20s')${CYN}│${N}"
-    echo -e "  ${CYN}├─────────────────────────────────────────┤${N}"
-    printf  "  ${CYN}│${N}  %-12s : ${W}%-25s${CYN}│${N}\n" "Nama" "$name"
-    printf  "  ${CYN}│${N}  %-12s : ${GRN}%-25s${CYN}│${N}\n" "Host" "$DOMAIN"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Port" "443 · 8443"
-    printf  "  ${CYN}│${N}  %-12s : ${C}%-25s${CYN}│${N}\n" "Password" "$pass"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Security" "TLS"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Network" "ws · grpc"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Path WS" "/trojan"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Service GRPC" "trojan"
-    printf  "  ${CYN}│${N}  %-12s : ${YEL}%-25s${CYN}│${N}\n" "Expired" "$exp"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Limit IP" "${limit_ip} device(s)"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Quota" "${quota} GB"
-    echo -e "  ${CYN}├─────────────────────────────────────────┤${N}"
-    echo -e "  ${CYN}│${N}  ${GRN}Link TLS WS${N}$(printf '%29s')${CYN}│${N}"
-    local i=0
-    while [[ $i -lt ${#lWS} ]]; do
-        printf  "  ${CYN}│${N}  ${C}%-41s${CYN}│${N}\n" "${lWS:$i:41}"
-        ((i+=41))
-    done
-    echo -e "  ${CYN}├─────────────────────────────────────────┤${N}"
-    echo -e "  ${CYN}│${N}  ${GRN}Link GRPC${N}$(printf '%31s')${CYN}│${N}"
-    local i=0
-    while [[ $i -lt ${#lGRPC} ]]; do
-        printf  "  ${CYN}│${N}  ${C}%-41s${CYN}│${N}\n" "${lGRPC:$i:41}"
-        ((i+=41))
-    done
-    echo -e "  ${CYN}╰─────────────────────────────────────────╯${N}\n"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 6) / 2 )) "TROJAN"
+    echo -e "$SEP"
+    printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"   "Remarks"       "$name"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "CITY"          "$city"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "ISP"           "$isp"
+    printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"   "Domain"        "$DOMAIN"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "443,8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Port any"      "2052,2053,8880"
+    printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"   "Password"      "$pass"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Security"      "tls"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "network"       "ws,grpc,upgrade"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "path ws"       "/trojan"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "serviceName"   "trojan"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "path upgrade"  "/uptrojan"
+    printf "${CYN}%-${kw}s${N}: ${YEL}%s${N}\n" "Expired On"    "$exp"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Limit IP"      "${limit_ip} Device"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Quota"         "${quota} GB"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 15) / 2 )) "TROJAN WS TLS"
+    echo -e "$SEP"
+    echo -e "${C}${lWSTLS}${N}"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 11) / 2 )) "TROJAN GRPC"
+    echo -e "$SEP"
+    echo -e "${C}${lGRPC}${N}"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 18) / 2 )) "TROJAN Upgrade TLS"
+    echo -e "$SEP"
+    echo -e "${C}${lUPTLS}${N}"
+    echo -e "$SEP"
+    echo ""
 }
 
 create_trojan() {
