@@ -173,7 +173,7 @@ create_trojan() {
     local exp_show=$(date -d "+${DAYS} days" +"%d %B %Y")
 
     xray_add_trojan "$PASS" "$NAME"
-    flock -x -w 10 /tmp/als-db.lock bash -c 'echo "#trojan#${NAME}#${PASS}#${exp_date}#${LIMIT_IP}#${QUOTA}" >> "$DB"'
+    echo "#trojan#${NAME}#${PASS}#${exp_date}#${LIMIT_IP}#${QUOTA}" >> "$DB"
 
     echo -e "\n  ${GRN}✓ Akun Trojan berhasil dibuat!${N}"
     show_trojan "$NAME" "$PASS" "$exp_show" "$LIMIT_IP" "$QUOTA"
