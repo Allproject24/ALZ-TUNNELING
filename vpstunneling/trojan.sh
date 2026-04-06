@@ -67,9 +67,9 @@ show_trojan() {
     city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
     isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
 
-    local lWSTLS=$(trojan_link  "$pass" "$DOMAIN" "8443" "ws"          "/trojan"   "$name")
-    local lGRPC=$(trojan_link   "$pass" "$DOMAIN" "8443" "grpc"        "trojan"    "$name")
-    local lUPTLS=$(trojan_link  "$pass" "$DOMAIN" "8443" "httpupgrade" "/uptrojan" "$name")
+    local lWSTLS=$(trojan_link  "$pass" "$DOMAIN" "443" "ws"          "/trojan"   "$name")
+    local lGRPC=$(trojan_link   "$pass" "$DOMAIN" "443" "grpc"        "trojan"    "$name")
+    local lUPTLS=$(trojan_link  "$pass" "$DOMAIN" "443" "httpupgrade" "/uptrojan" "$name")
 
     echo ""
     echo -e "$SEP"
@@ -79,7 +79,7 @@ show_trojan() {
     printf "${CYN}%-${kw}s${N}: %s\n"            "CITY"          "$city"
     printf "${CYN}%-${kw}s${N}: %s\n"            "ISP"           "$isp"
     printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"   "Domain"        "$DOMAIN"
-    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"            "Port TLS"      "443,8443"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Port any"      "2052,2053,8880"
     printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"   "Password"      "$pass"
     printf "${CYN}%-${kw}s${N}: %s\n"            "Security"      "tls"
