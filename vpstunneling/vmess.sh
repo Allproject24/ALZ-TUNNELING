@@ -45,7 +45,7 @@ for ib in cfg.get('inbounds',[]):
             clients.append({'id':'$uuid','alterId':0,'email':'${name}@alstore','level':0})
             ib['settings']['clients'] = clients
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl reload xray 2>/dev/null || systemctl restart xray 2>/dev/null
+" 2>/dev/null && systemctl reload xray-vmess 2>/dev/null || systemctl restart xray-vmess 2>/dev/null
 }
 
 xray_del_vmess() {
@@ -59,7 +59,7 @@ for ib in cfg.get('inbounds',[]):
     if ib.get('tag') in ('vmess-ws','vmess-grpc','vmess-upgrade'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl reload xray 2>/dev/null || systemctl restart xray 2>/dev/null
+" 2>/dev/null && systemctl reload xray-vmess 2>/dev/null || systemctl restart xray-vmess 2>/dev/null
 }
 
 show_vmess() {
