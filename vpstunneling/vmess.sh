@@ -34,11 +34,11 @@ vmess_link() {
 xray_add_vmess() {
     local uuid="$1" name="$2" limit_ip="$3"
     [[ ! -f "$XRAY_CFG" ]] && return
-    python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vmess-ws','vmess-grpc'):
+    if ib.get('tag') in ('vmess-ws','vmess-grpc','vmess-upgrade'):
         clients = ib['settings'].get('clients',[])
         if not any(c.get('id')=='$uuid' for c in clients):
             clients.append({'id':'$uuid','alterId':0,'email':'${name}@alstore','level':0})
@@ -50,11 +50,11 @@ with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 xray_del_vmess() {
     local uuid="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
-    python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
-    if ib.get('tag') in ('vmess-ws','vmess-grpc'):
+    if ib.get('tag') in ('vmess-ws','vmess-grpc','vmess-upgrade'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 " 2>/dev/null && systemctl restart xray 2>/dev/null
@@ -176,7 +176,7 @@ delete_vmess() {
     if [[ "$c" =~ ^[Yy]$ ]]; then
         local UUID=$(grep "^#vmess#${NAME}#" "$DB" | cut -d'#' -f4)
         xray_del_vmess "$UUID"
-        sed -i "/^#vmess#${NAME}#/d" "$DB"
+        flock -x -w 10 /tmp/als-db.lock sed -i "/^#vmess#${NAME}#/d" "$DB"
         echo -e "\n  ${GRN}✓ Akun '${NAME}' berhasil dihapus${N}\n"
     else
         echo -e "\n  ${YEL}Dibatalkan${N}\n"
