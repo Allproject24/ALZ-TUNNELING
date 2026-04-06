@@ -19,8 +19,9 @@ svc_dot() {
 
 header() {
     clear
-    local ip="${VPS_IP:-$(curl -s ifconfig.me 2>/dev/null)}"
-    local isp=$(curl -s ipinfo.io/org 2>/dev/null | cut -d'"' -f2 | cut -d' ' -f2-)
+    source $DIR/config.conf 2>/dev/null
+    local ip="${VPS_IP:-$(curl -s --max-time 3 ifconfig.me 2>/dev/null)}"
+    local isp="${ISP:-$(curl -s --max-time 3 ipinfo.io/org 2>/dev/null | cut -d'"' -f2 | cut -d' ' -f2-)}"
     local ram_used=$(free -m | awk '/^Mem:/{print $3}')
     local ram_total=$(free -m | awk '/^Mem:/{print $2}')
     local uptime=$(uptime -p | sed 's/up //')
