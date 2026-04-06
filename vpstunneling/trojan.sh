@@ -220,4 +220,4 @@ trojan_menu() {
     esac
 }
 
-trojan_menu
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && trojan_menu
