@@ -175,6 +175,11 @@ for f in "${SCRIPTS[@]}"; do
     push_file "$f"
 done
 
+# --- Push config files ---
+for f in "${CONFIGS[@]}"; do
+    push_file "$f"
+done
+
 echo ""
 echo -e "  ${CYN}══════════════════════════════════════════${N}"
 echo -e "  ${W}Hasil Push:${N}  ${GRN}${success} berhasil${N}  |  ${RED}${failed} gagal${N}"
