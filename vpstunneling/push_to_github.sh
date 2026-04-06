@@ -33,6 +33,12 @@ SCRIPTS=(
     "install.sh"
 )
 
+CONFIGS=(
+    "configs/xray_config.json"
+    "configs/nginx_vpstunnel.conf"
+    "configs/als-tunneling.conf"
+)
+
 clear
 echo -e "${CYN}"
 echo -e "  ╭─────────────────────────────────────────╮"
