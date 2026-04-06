@@ -232,4 +232,4 @@ vmess_menu() {
     esac
 }
 
-vmess_menu
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && vmess_menu
