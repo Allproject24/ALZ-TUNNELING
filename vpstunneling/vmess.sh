@@ -34,7 +34,8 @@ vmess_link() {
 xray_add_vmess() {
     local uuid="$1" name="$2" limit_ip="$3"
     [[ ! -f "$XRAY_CFG" ]] && return
-    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
+    flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
@@ -44,20 +45,21 @@ for ib in cfg.get('inbounds',[]):
             clients.append({'id':'$uuid','alterId':0,'email':'${name}@alstore','level':0})
             ib['settings']['clients'] = clients
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl restart xray 2>/dev/null
+" 2>/dev/null && systemctl reload xray 2>/dev/null || systemctl restart xray 2>/dev/null
 }
 
 xray_del_vmess() {
     local uuid="$1"
     [[ ! -f "$XRAY_CFG" ]] && return
-    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null; flock -x -w 15 /tmp/als-xray.lock python3 -c "
+    cp "$XRAY_CFG" "${XRAY_CFG}.bak" 2>/dev/null
+    flock -x -w 15 /tmp/als-xray.lock python3 -c "
 import json
 with open('$XRAY_CFG') as f: cfg = json.load(f)
 for ib in cfg.get('inbounds',[]):
     if ib.get('tag') in ('vmess-ws','vmess-grpc','vmess-upgrade'):
         ib['settings']['clients'] = [c for c in ib['settings'].get('clients',[]) if c.get('id')!='$uuid']
 with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
-" 2>/dev/null && systemctl restart xray 2>/dev/null
+" 2>/dev/null && systemctl reload xray 2>/dev/null || systemctl restart xray 2>/dev/null
 }
 
 show_vmess() {
@@ -69,11 +71,11 @@ show_vmess() {
     city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
     isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
 
-    local lWSTLS=$(vmess_link  "$name" "$DOMAIN" "8443" "$uuid" "ws"          "/vmess"   "tls")
-    local lWSNTLS=$(vmess_link "$name" "$DOMAIN" "80"   "$uuid" "ws"          "/vmess"   "none")
-    local lGRPC=$(vmess_link   "$name" "$DOMAIN" "8443" "$uuid" "grpc"        "vmess"    "tls")
-    local lUPTLS=$(vmess_link  "$name" "$DOMAIN" "8443" "$uuid" "httpupgrade" "/upvmess" "tls")
-    local lUPNTLS=$(vmess_link "$name" "$DOMAIN" "80"   "$uuid" "httpupgrade" "/upvmess" "none")
+    local lWSTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "ws"          "/vmess"   "tls")
+    local lWSNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "ws"          "/vmess"   "none")
+    local lGRPC=$(vmess_link   "$name" "$DOMAIN" "443" "$uuid" "grpc"        "vmess"    "tls")
+    local lUPTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "httpupgrade" "/upvmess" "tls")
+    local lUPNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "httpupgrade" "/upvmess" "none")
 
     echo ""
     echo -e "$SEP"
@@ -83,7 +85,7 @@ show_vmess() {
     printf "${CYN}%-${kw}s${N}: %s\n"           "CITY"          "$city"
     printf "${CYN}%-${kw}s${N}: %s\n"           "ISP"           "$isp"
     printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"  "Domain"        "$DOMAIN"
-    printf "${CYN}%-${kw}s${N}: %s\n"           "Port TLS"      "8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Port TLS"      "443,8443"
     printf "${CYN}%-${kw}s${N}: %s\n"           "Port none TLS" "80,8080"
     printf "${CYN}%-${kw}s${N}: %s\n"           "Port any"      "2052,2053,8880"
     printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"  "id"            "$uuid"
