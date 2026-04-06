@@ -1,0 +1,232 @@
+{
+  "log": {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "warning"
+  },
+  "api": {
+    "tag": "api",
+    "services": ["StatsService", "HandlerService", "RoutingService"]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "inbounds": [
+    {
+      "tag": "api",
+      "listen": "127.0.0.1",
+      "port": 10099,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      }
+    },
+    {
+      "tag": "vmess-ws",
+      "port": 10001,
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vmess"
+        }
+      }
+    },
+    {
+      "tag": "vmess-grpc",
+      "port": 10011,
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "grpcSettings": {
+          "serviceName": "vmess"
+        }
+      }
+    },
+    {
+      "tag": "vmess-upgrade",
+      "port": 10021,
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "httpupgrade",
+        "httpupgradeSettings": {
+          "path": "/upvmess",
+          "host": ""
+        }
+      }
+    },
+    {
+      "tag": "vless-ws",
+      "port": 10002,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vless"
+        }
+      }
+    },
+    {
+      "tag": "vless-grpc",
+      "port": 10012,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "grpcSettings": {
+          "serviceName": "vless"
+        }
+      }
+    },
+    {
+      "tag": "vless-upgrade",
+      "port": 10022,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "httpupgrade",
+        "httpupgradeSettings": {
+          "path": "/upvless",
+          "host": ""
+        }
+      }
+    },
+    {
+      "tag": "trojan-ws",
+      "port": 10003,
+      "listen": "127.0.0.1",
+      "protocol": "trojan",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/trojan"
+        }
+      }
+    },
+    {
+      "tag": "trojan-grpc",
+      "port": 10013,
+      "listen": "127.0.0.1",
+      "protocol": "trojan",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "grpcSettings": {
+          "serviceName": "trojan"
+        }
+      }
+    },
+    {
+      "tag": "trojan-upgrade",
+      "port": 10023,
+      "listen": "127.0.0.1",
+      "protocol": "trojan",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "httpupgrade",
+        "httpupgradeSettings": {
+          "path": "/uptrojan",
+          "host": ""
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "blocked"
+    },
+    {
+      "tag": "warp",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 40000,
+            "version": 5
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp"
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": ["api"],
+        "outboundTag": "api"
+      },
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "warp"
+      }
+    ]
+  },
+  "dns": {
+    "servers": [
+      "1.1.1.1",
+      "8.8.8.8",
+      "localhost"
+    ],
+    "queryStrategy": "UseIPv4"
+  }
+}
