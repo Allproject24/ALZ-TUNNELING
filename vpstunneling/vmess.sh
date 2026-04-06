@@ -25,7 +25,9 @@ header_vmess() {
 
 vmess_link() {
     local ps="$1" add="$2" port="$3" id="$4" net="$5" path="$6" tls="$7"
-    local json="{\"v\":\"2\",\"ps\":\"${ps}\",\"add\":\"${add}\",\"port\":\"${port}\",\"id\":\"${id}\",\"aid\":\"0\",\"net\":\"${net}\",\"path\":\"${path}\",\"type\":\"none\",\"host\":\"${add}\",\"sni\":\"${add}\",\"tls\":\"${tls}\"}"
+    local json
+    json=$(printf '{\n  "v": "2",\n  "ps": "%s",\n  "add": "%s",\n  "port": "%s",\n  "id": "%s",\n  "aid": "0",\n  "net": "%s",\n  "path": "%s",\n  "type": "none",\n  "host": "%s",\n  "sni": "%s",\n  "tls": "%s"\n}\n' \
+        "$ps" "$add" "$port" "$id" "$net" "$path" "$add" "$add" "$tls")
     echo "vmess://$(echo -n "$json" | base64 -w 0)"
 }
 
@@ -60,43 +62,62 @@ with open('$XRAY_CFG','w') as f: json.dump(cfg,f,indent=2)
 
 show_vmess() {
     local name="$1" uuid="$2" exp="$3" limit_ip="$4" quota="$5"
-    local lTLS=$(vmess_link "$name" "$DOMAIN" "443" "$uuid" "ws" "/vmess" "tls")
-    local lNTLS=$(vmess_link "$name" "$DOMAIN" "80" "$uuid" "ws" "/vmess" "none")
-    local lGRPC=$(vmess_link "$name-grpc" "$DOMAIN" "443" "$uuid" "grpc" "vmess" "tls")
+    local SEP="${CYN}————————————————————————————————————${N}"
+    local kw=15
+
+    local city isp
+    city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
+    isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
+
+    local lWSTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "ws"          "/vmess"   "tls")
+    local lWSNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "ws"          "/vmess"   "none")
+    local lGRPC=$(vmess_link   "$name" "$DOMAIN" "443" "$uuid" "grpc"        "vmess"    "tls")
+    local lUPTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "httpupgrade" "/upvmess" "tls")
+    local lUPNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "httpupgrade" "/upvmess" "none")
 
     echo ""
-    echo -e "  ${CYN}╭─────────────────────────────────────────╮${N}"
-    echo -e "  ${CYN}│${N}  ${YEL}✦ Detail Akun VMESS${N}$(printf '%21s')${CYN}│${N}"
-    echo -e "  ${CYN}├─────────────────────────────────────────┤${N}"
-    printf  "  ${CYN}│${N}  %-12s : ${W}%-25s${CYN}│${N}\n" "Nama" "$name"
-    printf  "  ${CYN}│${N}  %-12s : ${GRN}%-25s${CYN}│${N}\n" "Host" "$DOMAIN"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Port TLS" "443 · 8443"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Port NTLS" "80 · 8080"
-    printf  "  ${CYN}│${N}  %-12s : ${C}%-25s${CYN}│${N}\n" "UUID" "${uuid:0:25}"
-    printf  "  ${CYN}│${N}  %-12s : ${C}%-25s${CYN}│${N}\n" "" "${uuid:25}"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "AlterId" "0"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Network" "ws · grpc"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Path WS" "/vmess"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Service GRPC" "vmess"
-    printf  "  ${CYN}│${N}  %-12s : ${YEL}%-25s${CYN}│${N}\n" "Expired" "$exp"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Limit IP" "${limit_ip} device(s)"
-    printf  "  ${CYN}│${N}  %-12s : %-25s${CYN}│${N}\n" "Quota" "${quota} GB"
-    echo -e "  ${CYN}├─────────────────────────────────────────┤${N}"
-    echo -e "  ${CYN}│${N}  ${GRN}Link TLS WS${N}$(printf '%29s')${CYN}│${N}"
-    # Print link in chunks of 41 chars
-    local i=0
-    while [[ $i -lt ${#lTLS} ]]; do
-        printf  "  ${CYN}│${N}  ${C}%-41s${CYN}│${N}\n" "${lTLS:$i:41}"
-        ((i+=41))
-    done
-    echo -e "  ${CYN}├─────────────────────────────────────────┤${N}"
-    echo -e "  ${CYN}│${N}  ${GRN}Link NTLS WS${N}$(printf '%28s')${CYN}│${N}"
-    local i=0
-    while [[ $i -lt ${#lNTLS} ]]; do
-        printf  "  ${CYN}│${N}  ${C}%-41s${CYN}│${N}\n" "${lNTLS:$i:41}"
-        ((i+=41))
-    done
-    echo -e "  ${CYN}╰─────────────────────────────────────────╯${N}\n"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 5) / 2 )) "VMESS"
+    echo -e "$SEP"
+    printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"  "Remarks"       "$name"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "CITY"          "$city"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "ISP"           "$isp"
+    printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"  "Domain"        "$DOMAIN"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Port TLS"      "443,8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Port none TLS" "80,8080"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Port any"      "2052,2053,8880"
+    printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"  "id"            "$uuid"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "alterId"       "0"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Security"      "auto"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "network"       "ws,grpc,upgrade"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "path ws"       "/vmess"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "serviceName"   "vmess"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "path upgrade"  "/upvmess"
+    printf "${CYN}%-${kw}s${N}: ${YEL}%s${N}\n" "Expired On"   "$exp"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Limit IP"      "${limit_ip} Device"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Quota"         "${quota} GB"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 14) / 2 )) "VMESS WS TLS"
+    echo -e "$SEP"
+    echo -e "${C}${lWSTLS}${N}"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 16) / 2 )) "VMESS WS NO TLS"
+    echo -e "$SEP"
+    echo -e "${C}${lWSNTLS}${N}"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 10) / 2 )) "VMESS GRPC"
+    echo -e "$SEP"
+    echo -e "${C}${lGRPC}${N}"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 16) / 2 )) "VMESS Upgrade TLS"
+    echo -e "$SEP"
+    echo -e "${C}${lUPTLS}${N}"
+    echo -e "$SEP"
+    printf "%*s\n" $(( (36 + 19) / 2 )) "VMESS Upgrade NO TLS"
+    echo -e "$SEP"
+    echo -e "${C}${lUPNTLS}${N}"
+    echo -e "$SEP"
+    echo ""
 }
 
 create_vmess() {
