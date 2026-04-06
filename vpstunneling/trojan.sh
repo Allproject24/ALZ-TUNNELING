@@ -10,7 +10,7 @@ W='\e[1;37m'  N='\e[0m'
 RED='\e[1;31m' GRN='\e[1;32m' YEL='\e[1;33m' CYN='\e[1;36m' C='\e[0;36m' Y='\e[0;33m'
 
 DB="$DIR/accounts.db"
-XRAY_CFG="${XRAY_CONFIG:-/etc/xray/trojan.json}"
+XRAY_CFG="/etc/xray/trojan.json"
 DOMAIN="${DOMAIN:-$(curl -s ifconfig.me 2>/dev/null)}"
 
 rnd_user() { echo "als-$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 5)"; }
