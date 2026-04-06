@@ -69,11 +69,11 @@ show_vmess() {
     city=$(curl -s --max-time 3 "https://ipinfo.io/city" 2>/dev/null || echo "Singapore")
     isp=$(curl -s --max-time 3 "https://ipinfo.io/org" 2>/dev/null | sed 's/AS[0-9]* //' || echo "N/A")
 
-    local lWSTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "ws"          "/vmess"   "tls")
-    local lWSNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "ws"          "/vmess"   "none")
-    local lGRPC=$(vmess_link   "$name" "$DOMAIN" "443" "$uuid" "grpc"        "vmess"    "tls")
-    local lUPTLS=$(vmess_link  "$name" "$DOMAIN" "443" "$uuid" "httpupgrade" "/upvmess" "tls")
-    local lUPNTLS=$(vmess_link "$name" "$DOMAIN" "80"  "$uuid" "httpupgrade" "/upvmess" "none")
+    local lWSTLS=$(vmess_link  "$name" "$DOMAIN" "8443" "$uuid" "ws"          "/vmess"   "tls")
+    local lWSNTLS=$(vmess_link "$name" "$DOMAIN" "80"   "$uuid" "ws"          "/vmess"   "none")
+    local lGRPC=$(vmess_link   "$name" "$DOMAIN" "8443" "$uuid" "grpc"        "vmess"    "tls")
+    local lUPTLS=$(vmess_link  "$name" "$DOMAIN" "8443" "$uuid" "httpupgrade" "/upvmess" "tls")
+    local lUPNTLS=$(vmess_link "$name" "$DOMAIN" "80"   "$uuid" "httpupgrade" "/upvmess" "none")
 
     echo ""
     echo -e "$SEP"
@@ -83,7 +83,7 @@ show_vmess() {
     printf "${CYN}%-${kw}s${N}: %s\n"           "CITY"          "$city"
     printf "${CYN}%-${kw}s${N}: %s\n"           "ISP"           "$isp"
     printf "${CYN}%-${kw}s${N}: ${W}%s${N}\n"  "Domain"        "$DOMAIN"
-    printf "${CYN}%-${kw}s${N}: %s\n"           "Port TLS"      "443,8443"
+    printf "${CYN}%-${kw}s${N}: %s\n"           "Port TLS"      "8443"
     printf "${CYN}%-${kw}s${N}: %s\n"           "Port none TLS" "80,8080"
     printf "${CYN}%-${kw}s${N}: %s\n"           "Port any"      "2052,2053,8880"
     printf "${CYN}%-${kw}s${N}: ${C}%s${N}\n"  "id"            "$uuid"
